@@ -20,7 +20,7 @@ exit
 ```shell
 git clone https://github.com/high-u/picopaas.git
 cd picopaas
-node server.js
+node server.js ~
 ```
 
 ## Usage
