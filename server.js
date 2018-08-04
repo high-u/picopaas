@@ -1,27 +1,29 @@
-var git = require('gift')
-var compose = require('docker-compose')
-var pushover = require('pushover')
-var mkdirp = require('mkdirp')
+const express = require('express');
+const gpusher = require('gpusher');
+const execSync = require('child_process').execSync
+const exec = require('child_process').exec
 
-var pushDir = process.argv[2] ? process.argv[2] : __dirname
-console.log('Deployment Directory: ', pushDir)
-
-var repos = pushover(pushDir + '/repos')
-repos.on('push', function (push) {
-  console.log('push ' + push.repo + '/' + push.commit  + ' (' + push.branch + ')')
-  push.accept()
-  // mkdirp.sync(pushDir + '/deploy3/' + push.repo)
-  git.clone(pushDir + '/repos/' + push.repo, 'deploy4/' + push.repo, 1, push.branch, function (err, _repo) {
-    console.log('Deployment Path: ', _repo.path)
-    compose.up({ cwd: _repo.path, log: true }, function (err) {
-      console.log('docker-compose up')
-    })
+const port = 3000;
+const app = express();
+const repos = gpusher('./repos');
+ 
+repos.on('push', p => {
+  console.log(
+    'branch=%s\nrepo=%s\ncommit=%s',
+    p.branch, p.commit, p.repo,
+  );
+  p.accept();
+  execSync('rm -fr ./deploy/' + p.repo + '/\\* ./deploy/' + p.repo + '/.\\*')
+  exec('git clone http://localhost:3000/' + p.repo + ' deploy/' + p.repo, (err, stdout, stderr) => {
+    console.log(err, stdout, stderr)
+    const dockerComposeYaml =  execSync('find ' + __dirname + '/deploy/' + p.repo + ' -maxdepth 1 -type f -name docker-compose\\*.y\\*ml').toString().replace(/\n/g, '');
+    //console.log('yaml: ' + dockerComposeYaml)
+    const result =  execSync('docker-compose -f ' + dockerComposeYaml + ' up -d --build')
   })
-})
-
-var http = require('http')
-var server = http.createServer(function (req, res) {
-  repos.handle(req, res)
-})
-server.listen(3000)
-console.log('Listen Port: ', '3000')
+});
+ 
+app.all('/*', repos.handle.bind(repos)); 
+ 
+app.listen(port, () => {
+  console.log('listening on %d', port);
+});
